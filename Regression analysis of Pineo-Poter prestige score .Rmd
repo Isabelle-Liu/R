@@ -1,0 +1,481 @@
+---
+title: "HW"
+subtitle: "Applied regression"
+author: "Isabelle"
+date: "00/00/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tidyverse)
+require(gridExtra)
+require(GGally)  
+require(broom)
+theme.info <- theme(plot.title = element_text(size=16, hjust=0.5),
+                    axis.title = element_text(size=14),
+                    axis.text = element_text(size=14))
+```
+
+
+## Question 1
+Do some internet research and write a short paragraph in your own words about how the Pineo-Porter prestige score is computed. Include the reference(s) you used. Do you think this score is a reliable measure? Justify your answer.
+
+Answer:
+The Pineo-Poter prestige score is used to measure the socioeconomic status of the people in Canada at the time of its creation. It is calculated by regression analysis based on social attributes including education and income. Pineo Poter can calculate the prestige index of 16 works, and its calculation formula is ${Y}prestige = {\beta_{1}}\times education(years) + {\beta_{2}}\times income(dollar) + {\beta_{0}}$
+This was a reliable measure when it was first released, since the study was led by professor using the data from census. It was created to help in comparing and measure occupations in the 1971 and 1981 censuses. However, in the current situation, due to the emergence of more new occupations, the definition of occupation type has changed a lot. Moreover, many previous occupations have been redefined, and their income levels and social status are totally different. Therefore, in the current environment, the reputation score model, Pineo Poter,  is not reliable.
+
+reference:http://rstudio-pubs-static.s3.amazonaws.com/425420_448c3a57871f4ac3a98f7b7781ffc91e.html
+http://deonandan.com/pdf/lcdce.pdf
+
+
+## Question 2
+Create a scatterplot matrix of all the quantitative variables. Use a different symbol (or color) for each profession type: no type, “bc”, “prof”, and “wc” when making your plot. For the remainder of this question, we will use the explanatory variables: income, education, and type. Does restricting our regression to only these variables make sense given your exploratory analysis? Justify your answer.
+
+Solution: 
+```{r}
+#read the data
+x <- read_delim("prestige.dat", col_names=TRUE, delim=",")
+head(x)
+# check the data type
+glimpse(x)
+# one-variable summaries
+summary(x[,c("women", "income", "education","prestige","census")])
+round(apply(x[,c("women", "income", "education","prestige","census")], 2, sd), digits=3)
+
+#create a scatterplot matrix for all quantative variables
+x %>% ggpairs(aes(color=type), columns=c(2,3,4,5,6),title = "Scatterplot Matrix of all the quantitative variables")
+          theme.info
+          
+#only use the explanatory variables: income, education, and type  
+# why not use independent variable women?
+# Correlation analysis for linear related variabels
+x %>% 
+  dplyr::select(2,3,5)%>%
+  cor(method = "pearson", use = "complete.obs") %>%
+  round(digits=4) 
+```
+Answer:Yes, only these variables are significant enough.
+According to the scatter diagram, there is no linear relationship between the proportion of professional women and the prestige score, as well as between census and prestige score. So the proportion of professional women and census will not be used as explanatory variables. Explanatory variables, including income, education and type, can be used for the rest of the problem. According to correlation analysis, there is a strong positive correlation between income, education and reputation. The correlation coefficient was 0.8502 and 0.7149, respectively. So it is reasonable to believe that adding education and income can provide a reasonable explanation ability.
+
+
+
+## Question 3
+Which professions are missing “type”? Since the other variables for these observations are available, we could group them together as a fourth professional category to include them in the analysis. Is this advisable or should we remove them from our data set? Justify your answer.
+
+Solution: 
+```{r}
+#Find the missing type
+x[which(is.na(x$type)),]
+
+#check the frequency of each type
+x%>% ggplot(aes(x=type))+
+  geom_bar(fill="darkseagreen2")+
+  ggtitle("Count of occupations for different type")
+
+#Change value of NA to others
+x[which(is.na(x$type)),]$type<-"others"
+
+# linear regression model with the fourth type
+lm.1<-lm(prestige ~ education + income + type, data=x)
+
+# linear regression model without the fourth type
+lm.2<-lm(prestige ~ education + income + type, data=x[-which(x$type=="others"),])
+
+summary(lm.1)
+summary(lm.2)
+```
+Answer:
+First of all, no-types occupations are athletes, newsboys, nannies, and farmers. From a practical point of view, these jobs do not have the same professional requirements, nor belong to the same occupational category. Therefore, there is no reason for us to combine these three professions.
+Secondly, in 102 observations, the missing value is 4. Because the proportion of missing values is less than 5%, the four missing observations can be deleted.
+Finally, according to the results of the linear regression model with or without the fourth category, the fourth category has no statistical necessity (P > 0.05). Therefore, the lost data should be deleted from the dataset.
+
+
+## Question 4
+Visually, does there seem to be an interaction between type and education and/or type and income? Justify your answer.
+Solution: 
+```{r}
+#Data cleaning
+#delete the missing value
+x.1<-x[-which(x$type=="others"),]
+#delete the unrelated attributes
+x.clean<-x.1[,c("education","income","type","prestige")]
+
+#linear regression for one variable and the inter-variable
+lm.edu<-lm(prestige ~ education+ type + education*type, data=x.clean)
+lm.inc<-lm(prestige ~ income+ type + income*type, data=x.clean)
+
+#Scatterplot between education and prestige
+x.clean %>% ggplot( aes(x=education,y=prestige,color=type))+
+  geom_point()+
+  #prof
+  geom_abline(slope = coef(lm.edu)[2]+coef(lm.edu)[5], intercept=coef(lm.edu)[1]+coef(lm.edu)[3], size=1, col="limegreen")+ 
+  #wc
+  geom_abline(slope = coef(lm.edu)[2]+coef(lm.edu)[6], intercept=coef(lm.edu)[1]+coef(lm.edu)[4], size=1, col="steelblue1")+ 
+  #bc
+  geom_abline(slope = coef(lm.edu)[2], intercept=coef(lm.edu)[1], size=1, col="lightcoral")+
+  ggtitle("Scatterplot of education & prestige\nunder different types")+
+  theme.info
+
+#Scatterplot between income and prestige
+x.clean %>% ggplot( aes(x=income,y=prestige,color=type))+
+  geom_point()+
+  ggtitle("Scatterplot of income & prestige\nunder different types")+
+#prof
+  geom_abline(slope = coef(lm.inc)[2]+coef(lm.inc)[5], intercept=coef(lm.inc)[1]+coef(lm.inc)[3], size=1, col="limegreen")+ 
+  #wc
+  geom_abline(slope = coef(lm.inc)[2]+coef(lm.inc)[6], intercept=coef(lm.inc)[1]+coef(lm.inc)[4], size=1, col="steelblue1")+ 
+  #bc
+  geom_abline(slope = coef(lm.inc)[2], intercept=coef(lm.inc)[1], size=1, col="lightcoral")+
+  theme.info
+```
+Visually, since all the lines are not parallel, every line has a different slope, there should be an interaction between type and education as well as between income and type. Therefore, including interactive variables will provide more explanatory capability for the model.
+
+```{r}
+#linear regression after considering interaction 
+#education * type
+lm.3<-lm(prestige ~ education + income + type +education*type, data=x.clean)
+summary(lm.3)
+# according to the p-value, since it of all education * type > 0.05, this interacted variable is not statistically significant.
+
+#income * type
+lm.4<-lm(prestige ~ education + income + type +income*type, data=x.clean)
+summary(lm.4)
+# according to the p-value, since it of income*typeprof < 0.05, this interacted variable is significant, therefore income * type is statistically significant
+
+#(income+education)*type
+lm.5<-lm(prestige ~ education + income + type + (income+education)*type, data=x.clean)
+summary(lm.5)
+# according to the p-value, since it of income*typeprof,income*typeprof and education:typewc < 0.05, they should be statistically significant, this model should be kept. 
+```
+
+
+## Question 5
+Fit a model to predict prestige using: income, education, type, and any interaction terms based on your answer to question (4). Evaluate the model and include relevant output. Use your answer to question (3) to determine which observations to use in your analysis.
+
+According to the answer of Question(4), the model used for prediction is lm.5<-lm(prestige ~ education + income + type + (income+education)*type, data=x.clean)
+#Checking the regression assumption:(skip)
+#Model Evaluation
+lm.5<-lm(prestige ~ education + income + type + (income+education)*type, data=x.clean)
+```{r}
+lm.5
+#summary of model
+summary(lm.5)
+#1. RMSE
+summary(lm.5)$sigma
+#The estimate variability of response variable around the regression line is 6.318211
+
+#2. R^2 and adjusted R^2
+r1<-lapply(summary(lm(prestige ~ education, data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4)
+r1<-rbind(r1,lapply(summary(lm(prestige ~ education+income, data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4))
+r1<-rbind(r1,lapply(summary(lm(prestige ~ education+income+type, data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4))
+r1<-rbind(r1,lapply(summary(lm(prestige ~ education+income+type+income*type, data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4))
+r1<-rbind(r1,lapply(summary(lm.5)[c("r.squared", "adj.r.squared")], round, digits=4))
+r1<-cbind(r1,c("prestige vs. education","prestige vs. education+income","prestige vs. education+income+type","prestige vs. education+income+type+income*type","prestige vs. education+income+type+(income+education)*type"))
+r1
+```
+The adjusted R square shows that adding the interact variable increases the accuracy of the model
+About 87.47% of the variability in prestige can be explained by a regression model containing education, income, type and (income+education)*type.
+
+```{r}
+#3 Overall F-test
+anova(lm.5)
+```
+a=0.05
+hypotheses:
+H0:ßeducation = ßincome = ßtype = ß(income+education)*type=0
+H1:at least one slope is not zero
+test statistic:
+Fc = (21282.5+1792+591.2+890+238.4)/8/(3552.9/89) = 77.6364
+with p=8 and n-(p+1) = 98-(8+1)=89 degrees of freedom
+since p-value of education:type is 0.05557>a=0.05
+the null hypothesis cannot be rejected, the model is not adequate
+
+```{r}
+#partial F-test for income*type and (income+education)*type
+anova(lm.4,lm.5)
+```
+Since the p-value of partial F-test is larger than 0.05, the hypothesis zero cannot be rejected. Therefore, (income+education)*type is not statistically significants. Only keep the interactive variable income*type is enough
+
+Keep the model lm.4<-lm(prestige ~ education + income + type +income*type, data=x.clean)
+```{r}
+lm.4
+#summary of model
+summary(lm.4)
+#1. RMSE
+summary(lm.4)$sigma
+#The estimate variability of response variable around the regression line is 6.454624
+
+#2. R^2 and adjusted R^2
+r1<-lapply(summary(lm(prestige ~ education, data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4)
+r1<-rbind(r1,lapply(summary(lm(prestige ~ income, data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4))
+r1<-rbind(r1,lapply(summary(lm(prestige ~ education+income, data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4))
+r1<-rbind(r1,lapply(summary(lm(prestige ~ education+income+type, data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4))
+r1<-rbind(r1,lapply(summary(lm.4)[c("r.squared", "adj.r.squared")], round, digits=4))
+r1<-cbind(r1,c("prestige vs. education","prestige vs. income","prestige vs. education+income","prestige vs. education+income+type","prestige vs. education+income+type+income*type"))
+r1
+```
+About 86.63% of the variability in prestige can be explained by the regression model containing education, income, type and income*type.
+```{r}
+#3 Overall F-test
+anova(lm.4)
+```
+a=0.05
+hypotheses:
+H0:ßeducation = ßincome = ßtype = ßincome*type = 0
+H1:at least one slope is not zero
+test statistic:
+Fc=(21282.5+1792+591.2+890)/6/(3791.3/91)=98.2323
+with p=6 and n-(p+1) = 98-(6+1)=91 degrees of freedom
+since p-value<a=0.05
+the null hypothesis can be rejected, the model is adequate
+
+#4 t-test
+Hypotheis 1:
+H0:ßeducation=0
+H1:ßeducation≠0
+test statistic:
+t education = 5.063
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value< a=0.05
+The null hypothesis is rejected, education is a statistically significant when others are already in the model
+
+Hypotheis 2:
+H0:ßincome=0
+H1:ßincome≠0
+test statistic:
+t income = 6.010
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value< a=0.05
+The null hypothesis is rejected, income is a statistically significant when others are already in the model
+
+Hypotheis 3:
+H0:ßtypeprof=0
+H1:ßtypeprof≠0
+test statistic:
+t typeprof = 4.604
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value< a=0.05
+The null hypothesis is rejected, typeprof is a statistically significant when others are already in the model
+
+Hypotheis 4:
+H0:ßtypewc=0
+H1:ßtypewc≠0
+test statistic:
+t typewc = 1.349
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value> a=0.05
+The null hypothesis cannot be rejected, typewc is not statistically significant when others are already in the model
+
+Hypotheis 5:
+H0:ßincome:typeprof=0
+H1:ßincome:typeprof≠0
+test statistic:
+t income:typeprof = -4.539
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value< a=0.05
+The null hypothesis is rejected, income:typeprof is a statistically significant when others are already in the model
+
+Hypotheis 6:
+H0:ßincome:typewc=0
+H1:ßincome:typewc≠0
+test statistic:
+t education = -1.704
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value > a=0.05
+The null hypothesis cannot be rejected, income:typewc is not statistically significant when others are already in the model
+
+```{r}
+#5 Partial F-test(with or without the interactive variable)
+anova(lm.2)
+anova(lm.2,lm.4)
+```
+a=0.05
+H0:ß=0
+H1:ß≠0
+test statistic:
+Fc = (4681.3-3791.3)/2/50.3 = 8.846918
+p-value< a=0.05
+The null hypothesis is rejected, the slope of interactive variable is statistically significant.
+
+The final model is lm.4 <-lm(prestige ~ education + income + type +income*type, data=x.clean) which is statistically significant and have enough explanatory capability.
+
+
+## Question 6
+Interpret the slopes and y-intercept in the context of the data for your model.
+Solution: 
+```{r}
+summary(lm.4)
+```
+Model summary:
+Whole model: ${Y}prestige = -6.7272633 + 3.0396961\times{X}eduaction(years) + 0.0031344\times{X}income(dollars) + 25.1723873\times{X}typeprof + 7.1375093\times{X}typewc + -0.0025102\times{X}income(dollars)*typeprof + -0.0014856\times{X}income(dollars)*typewc$
+
+1. Regression line when type is prof: ${Y}prestige = -6.7272633 + 3.0396961\times{X}eduaction(years) + 0.0031344\times{X}income(dollars) + 25.1723873 + -0.0025102 \times{X}income(dollars)$
+Slope:If the job type of candidate is professional, every additional year of education will increase the prestige 3.0396961, and every additional dollar of income will increase prestige 0.0006242
+Y-intercept: If the type of the candidate is professional, and he/she doesn't have any education or income, he/she will still have 18.445124 in prestige.
+
+2. Regression line when type is wc: ${Y}prestige= -6.7272633 + 3.0396961\times{X}eduaction(years) + 0.0031344\times{X}income(dollars) + 7.1375093 + -0.0014856 \times{X}income(dollars)$   
+Slope:If the job type of candidate is a white collar , every additional year of education will increase the prestige 3.0396961, and every additional dollar of income will increase prestige 0.0016488
+Y-intercept: If the type of the candidate is a white collar, and he/she doesn't have any education or income, he/she will still have 0.410246 in prestige.
+
+3. Regression line when type is bd: ${Y}prestige=-6.7272633 + 3.0396961\times{X}eduaction(years) + 0.0031344\times{X}income(dollars)$
+Slope:If the job type of candidate is a blue collar, every additional year of education will increase the prestige 3.0396961, and every additional dollar of income will increase prestige 0.0031344
+Y-intercept: If the job type of the candidate is a blue collar, and he/she doesn't have any education or income, he/she will have -6.7272633 in prestige.
+
+
+## Question 7
+Create a histogram of income and a second histogram of log(income) (i.e., natural logarithm). How does the distribution change?
+
+Solution: 
+```{r}
+h1 <- x %>% ggplot(aes(income)) +
+  geom_histogram(bins=15, col="black", fill="cadetblue") +
+  ggtitle("Histogram of Income") +
+  labs(x="income($)") +
+  theme.info
+
+h2 <- x %>% ggplot(aes(log(income))) +
+  geom_histogram(bins=15, col="black", fill="cadetblue") +
+  ggtitle("Histogram of Log Income") +
+  labs(x="Log income($)") +
+  theme.info
+
+grid.arrange(h1, h2,ncol=2)
+
+```
+The distribution changed from a slightly right-skewed to more close to normally distributed.
+
+
+## Question 8
+Fit the model in question (5) but this time use log(income) (i.e., natural logarithm) instead of income. Evaluate the model and provide the relevant output.
+
+Solution: 
+```{r}
+lm.4.log<-lm(prestige ~ education + log(income) + type +log(income)*type, data=x.clean)
+lm.4.log
+summary(lm.4.log)
+```
+
+
+```{r}
+lm.4.log<-lm(prestige ~ education + log(income) + type +log(income)*type, data=x.clean)
+summary(lm.4.log)
+```
+#Evaluation
+```{r}
+#summary of model
+summary(lm.4.log)
+#1. RMSE
+summary(lm.4.log)$sigma
+#The estimate variability of response variable around the regression line is 6.49104
+
+#2. R^2 and adjusted R^2
+r2<-lapply(summary(lm(prestige ~ log(income), data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4)
+r2<-rbind(r2,lapply(summary(lm(prestige ~ education+log(income), data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4))
+r2<-rbind(r2,lapply(summary(lm(prestige ~ education+log(income)+type, data=x.clean))[c("r.squared", "adj.r.squared")], round, digits=4))
+r2<-rbind(r2,lapply(summary(lm.4.log)[c("r.squared", "adj.r.squared")], round, digits=4))
+r2<-cbind(r2,c("prestige vs.Log income","prestige vs. education+Log income","prestige vs. education+Log income+type","prestige vs. education+Log income+type+Log income*type"))
+r2
+```
+About 86.47% of the variability in prestige can be explained by a regression model containing education, log(income), type and log(income*type)
+.
+```{r}
+#3 Overall F-test
+anova(lm.4.log)
+```
+a=0.05
+hypotheses:
+H0:ßeducation = ßlog(income) = ßtype = ßlog(income)*type = 0
+H1:at least one slope is not zero
+test statistic:
+Fc=
+```{r}
+(21282.5+2499.1+469.1+262.1)/6/(3834/91)
+```
+with p=6 and n-(p+1) = 98-(6+1)=91 degrees of freedom
+since p-value<a=0.05
+the null hypothesis can be rejected, the model is adequate
+
+```{r}
+#4 T-test
+summary(lm.4.log)
+```
+a=0.05
+Hypotheis 1:
+H0:ßeducation=0
+H1:ßeducation≠0
+test statistic:
+t education = 5.357
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value< a=0.05
+The null hypothesis is rejected, education is a statistically significant when others are already in the model
+
+Hypotheis 2:
+H0:ßlog(income)=0
+H1:ßlog(income)≠0
+test statistic:
+t log(income) = 5.991
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value< a=0.05
+The null hypothesis is rejected, log(income) is a statistically significant when others are already in the model
+
+Hypotheis 3:
+H0:ßtypeprof=0
+H1:ßtypeprof≠0
+test statistic:
+t typeprof = 2.627
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value< a=0.05
+The null hypothesis is rejected, typeprof is a statistically significant when others are already in the model
+
+Hypotheis 4:
+H0:ßtypewc=0
+H1:ßtypewc≠0
+test statistic:
+t typewc = 1.394
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value> a=0.05
+The null hypothesis cannot be rejected, typewc is not statistically significant when others are already in the model
+
+Hypotheis 5:
+H0:ßlog(income):typeprof=0
+H1:ßlog(income):typeprof≠0
+test statistic:
+t log(income):typeprof = -2.431
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value< a=0.05
+The null hypothesis is rejected, log(income):typeprof is a statistically significant when others are already in the model
+
+Hypotheis 6:
+H0:ßlog(income):typewc=0
+H1:ßlog(income):typewc≠0
+test statistic:
+t log(income):typewc = -1.434
+Which has t distribution with n-(p+1)=98-(6+1)=91 degree of freedom
+p-value > a=0.05
+The null hypothesis cannot be rejected, log(income):typewc is not statistically significant when others are already in the model
+
+## Question 9
+ Is the model in question (5) or (8) better? Justify your answer. Why can’t we use a partial F-test here?
+
+Solution: 
+```{r}
+#RMSE of the model lm.4 and lm.4.log
+summary(lm.4)$sigma
+summary(lm.4.log)$sigma
+```
+By comparing the RMSE of both model, since it of the model lm.4 is lower, lm.4 is better.
+```{r}
+#Comparing the R^2
+lapply(summary(lm.4)[c("r.squared", "adj.r.squared")], round, digits=4)
+lapply(summary(lm.4.log)[c("r.squared", "adj.r.squared")], round, digits=4)
+```
+By comparing, the lm.4 has higher accuracy, therefore it is better.
+
+The partial F test cannot be used since lm.4 and lm.4.log are not nested model.The partial F-test can only be used when the same observations are used in both models.
+And it is used to determine whether the extra variables provide enough extra explanatory power as a group. In other words, the partial F-test tests whether the full model is significantly better than the reduced model.
+
+
+
+
+
